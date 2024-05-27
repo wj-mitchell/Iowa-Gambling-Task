@@ -2,7 +2,7 @@
 
 This is a version of the Iowa Gambling Task programmed in Python that I am developing to use in combination with Study 4 outlined within Project 31297 of my [Neuro_Uncertainty Reposity](https://github.com/wj-mitchell/Neuro_Uncertainty). 
 
-## Desecription
+## Description
 The task is mostly self-contained within the `Task.py` file. I have been running it through PsychoPy Runner, though it doesn't currently contain any PsychoPy code. Upon starting, you are prompted to enter a PID formatted as `DD-####` in line with the needs of our specific study; though this is simple to modify for your own purposes. Keep in mind if you do modify it, that it's designed to validate the PID according to that format, so be sure to change that as well. The task presents four card decks arranged in a square. Selecting any card deck requires pressing the A, B, C, or D key on your keyboard. Once that occurs, the image of the card will be replaced by another with a glow around it, to signify the subject's choice. Feedback regarding wins and losses appears at the center of the screen for 3 seconds before the next choice can be made. A net score is visible throughout the task in the upper right corner. The endowment subjects begin with is $2000. The total number of trials is 100, in line with 
 
 All images of the card decks are contained within the `assets` directory. Each deck has a `_selected` and `_unselected` .png image. The glow that defines the `_selected` .png images was generated within and exported from Microsoft Powerpoint. 
