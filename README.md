@@ -1,1 +1,1 @@
-# Iowa-Gambling-Task-Python
+# Iowa-Gambling-Task
