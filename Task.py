@@ -9,12 +9,17 @@ from datetime import datetime
 pygame.init()
 
 # Constants
+## --- Screen ---
 SCREEN_WIDTH = 1920
 SCREEN_HEIGHT = 1080
 BACKGROUND_COLOR = (169, 169, 169)
+
+##  --- Colors ---
 TEXT_COLOR = (0, 0, 0)
 GAIN_COLOR = (0, 255, 0)
 LOSS_COLOR = (255, 0, 0)
+
+## --- Images ---
 CARD_SIZE_MULTIPLIER = 2.5
 CARD_WIDTH = 100 * CARD_SIZE_MULTIPLIER
 CARD_HEIGHT = 150 * CARD_SIZE_MULTIPLIER
@@ -29,13 +34,19 @@ DECK_POSITIONS = {
     'C': (POS_COL_L, POS_ROW_BOTTOM),
     'D': (POS_COL_R, POS_ROW_BOTTOM)
 }
+
+## --- Text ---
 FEEDBACK_FONT_SIZE = 48
 SCORE_FONT_SIZE = 56
 MISC_FONT_SIZE = 36
+LABEL_FONT_SIZE = 72
 LINE_HEIGHT = FEEDBACK_FONT_SIZE + 5  # Space between lines
-INITIAL_BALANCE = 2000
 
-# Load card images
+## --- Task ---
+INITIAL_BALANCE = 2000
+TRIAL_WAIT_TIME = 2
+
+# Load unselected card images
 card_images = {
     'A': pygame.image.load('assets/card_blue_unselected.png'),
     'B': pygame.image.load('assets/card_red_unselected.png'),
@@ -64,19 +75,21 @@ pygame.display.set_caption("Iowa Gambling Task")
 feedback_font = pygame.font.Font(None, FEEDBACK_FONT_SIZE)
 score_font = pygame.font.Font(None, SCORE_FONT_SIZE)
 misc_font = pygame.font.Font(None, MISC_FONT_SIZE)
+label_font = pygame.font.Font(None, LABEL_FONT_SIZE)
 
-# Deck class
+# Defining deck class
 class Deck:
     def __init__(self, rewards, penalties):
         self.rewards = rewards
         self.penalties = penalties
+        self.selected_count = 0
 
     def draw_card(self):
         reward = random.choice(self.rewards)
         penalty = random.choice(self.penalties)
         return reward, penalty
 
-# IowaGamblingTask class
+# Defining task class
 class IowaGamblingTask:
     def __init__(self, pid):
         self.decks = {
@@ -91,12 +104,13 @@ class IowaGamblingTask:
         self.pid = pid
 
     def draw_card_from_deck(self, choice):
-        if choice in self.decks:
+        if choice in self.decks and self.decks[choice].selected_count < 40:
             reward, penalty = self.decks[choice].draw_card()
             net_reward = reward + penalty
             self.total_score += net_reward
             self.choices.append(choice)
             self.trial_data.append((len(self.choices), choice, reward, penalty, net_reward, self.total_score))
+            self.decks[choice].selected_count += 1
             return reward, penalty, net_reward
         return None, None, None
 
@@ -162,23 +176,75 @@ def render_multiline_text(lines, colors, feedback_font, surface, x, y):
         line_surface = feedback_font.render(line, True, color)
         surface.blit(line_surface, (x, y + i * LINE_HEIGHT))
 
+# Instruction screen
+def show_instructions():
+    screen.fill(BACKGROUND_COLOR)
+    instructions = [
+        "Welcome to the Iowa Gambling Task.",
+        "You will be selecting cards from four decks labeled A, B, C, and D.",
+        "Each selection will result in a reward and/or a penalty.",
+        "Your goal is to maximize your total score.",
+        "You have 100 trials to complete the task.",
+        "Press SPACE to begin."
+    ]
+    for i, line in enumerate(instructions):
+        text = misc_font.render(line, True, TEXT_COLOR)
+        screen.blit(text, (SCREEN_WIDTH // 2 - text.get_width() // 2, SCREEN_HEIGHT // 2 - 100 + i * LINE_HEIGHT))
+    pygame.display.flip()
+    
+    waiting = True
+    while waiting:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                return False
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+                waiting = False
+    return True
+
+# Start screen
+def show_start_screen():
+    screen.fill(BACKGROUND_COLOR)
+    start_text = misc_font.render("Press SPACE to begin", True, TEXT_COLOR)
+    screen.blit(start_text, (SCREEN_WIDTH // 2 - start_text.get_width() // 2, SCREEN_HEIGHT // 2))
+    pygame.display.flip()
+    
+    waiting = True
+    while waiting:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                return False
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+                waiting = False
+    return True
+
 # Main loop
 def main():
     pid = get_pid()
     if not pid:
         return
 
+    show_instructions()
+    
+    # if not show_start_screen():
+    #     return
+    
     task = IowaGamblingTask(pid)
     running = True
     trial = 0
 
     try:
         while running and trial < 100:
+            start_time = time.time()
             screen.fill(BACKGROUND_COLOR)
 
-            # Draw card images
+            # Draw card images and labels
             for key, position in DECK_POSITIONS.items():
                 screen.blit(card_images[key], position)
+                label = label_font.render(key, True, TEXT_COLOR)
+                label_rect = label.get_rect(center=(position[0] + CARD_WIDTH // 2, position[1] - 40))
+                screen.blit(label, label_rect)
 
             # Display current total score
             score_text = score_font.render(f"Total Score: ${task.total_score}", True, TEXT_COLOR)
@@ -205,6 +271,8 @@ def main():
                 reward, penalty, net_reward = task.draw_card_from_deck(choice)
                 if reward is not None:
                     trial += 1
+                    trial_time = time.time() - start_time
+                    task.trial_data[-1] = task.trial_data[-1] + (trial_time,)  # Add trial time to the last entry
                     print(f"Trial {trial}: Deck {choice}, Reward: {reward}, Penalty: {penalty}, Net reward: {net_reward}")
                     print(f"Total score: {task.total_score}")
 
@@ -224,7 +292,7 @@ def main():
                     screen.blit(selected_image, selected_rect.topleft)
                     render_multiline_text(feedback_lines, feedback_colors, feedback_font, screen, SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 - 50)
                     pygame.display.flip()
-                    time.sleep(3)  # Show feedback and selected card for 3 seconds
+                    time.sleep(TRIAL_WAIT_TIME)  # Show feedback and selected card for 2 seconds
 
             pygame.display.flip()
 
