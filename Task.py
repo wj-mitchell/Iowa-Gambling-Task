@@ -32,8 +32,10 @@ DECK_POSITIONS = {
 FEEDBACK_FONT_SIZE = 48
 SCORE_FONT_SIZE = 56
 MISC_FONT_SIZE = 36
+LABEL_FONT_SIZE = 72
 LINE_HEIGHT = FEEDBACK_FONT_SIZE + 5  # Space between lines
 INITIAL_BALANCE = 2000
+TRIAL_WAIT_TIME = 2  # Reduced wait time to 2 seconds
 
 # Load card images
 card_images = {
@@ -64,12 +66,14 @@ pygame.display.set_caption("Iowa Gambling Task")
 feedback_font = pygame.font.Font(None, FEEDBACK_FONT_SIZE)
 score_font = pygame.font.Font(None, SCORE_FONT_SIZE)
 misc_font = pygame.font.Font(None, MISC_FONT_SIZE)
+label_font = pygame.font.Font(None, LABEL_FONT_SIZE)
 
 # Deck class
 class Deck:
     def __init__(self, rewards, penalties):
         self.rewards = rewards
         self.penalties = penalties
+        self.selected_count = 0
 
     def draw_card(self):
         reward = random.choice(self.rewards)
@@ -90,15 +94,19 @@ class IowaGamblingTask:
         self.trial_data = []
         self.pid = pid
 
-    def draw_card_from_deck(self, choice):
+    def draw_card_from_deck(self, choice, start_time, trial_time, limit):
         if choice in self.decks:
-            reward, penalty = self.decks[choice].draw_card()
-            net_reward = reward + penalty
-            self.total_score += net_reward
-            self.choices.append(choice)
-            self.trial_data.append((len(self.choices), choice, reward, penalty, net_reward, self.total_score))
-            return reward, penalty, net_reward
-        return None, None, None
+            if self.decks[choice].selected_count < limit:
+                reward, penalty = self.decks[choice].draw_card()
+                net_reward = reward + penalty
+                self.total_score += net_reward
+                self.choices.append(choice)
+                self.trial_data.append((len(self.choices), choice, reward, penalty, net_reward, self.total_score, trial_time, start_time))
+                self.decks[choice].selected_count += 1
+                return reward, penalty, net_reward, None
+            else:
+                return None, None, None, True
+        return None, None, None, None
 
     def summarize_results(self):
         print("\nTask Completed")
@@ -110,7 +118,7 @@ class IowaGamblingTask:
         filename = f'data/IGT_{self.pid}_{date_str}.csv'
         with open(filename, 'w', newline='') as file:
             writer = csv.writer(file)
-            writer.writerow(['Trial', 'Deck Choice', 'Reward', 'Penalty', 'Net Reward', 'Total Score'])
+            writer.writerow(['Trial', 'Deck Choice', 'Reward', 'Penalty', 'Net Reward', 'Total Score', 'Trial Duration (s)', 'Start Time'])
             writer.writerows(self.trial_data)
 
 # PID validation function
@@ -118,18 +126,18 @@ def is_valid_pid(pid):
     return bool(re.match(r'^[A-Z]{2}-\d{4}$', pid))
 
 # PID Input Screen
-def get_pid():
+def get_pid(win_width, win_height):
     input_active = False
     pid = 'DD-'
     error_message = ''
     while True:
         screen.fill(BACKGROUND_COLOR)
         pid_text = misc_font.render("Enter Participant ID (format: DD-####):", True, TEXT_COLOR)
-        input_box = pygame.Rect(SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2, 200, 50)
+        input_box = pygame.Rect(win_width // 2 - 100, win_height // 2, 200, 50)
         txt_surface = misc_font.render(pid, True, TEXT_COLOR)
         width = max(200, txt_surface.get_width() + 10)
         input_box.w = width
-        screen.blit(pid_text, (SCREEN_WIDTH // 2 - pid_text.get_width() // 2, SCREEN_HEIGHT // 2 - 30))
+        screen.blit(pid_text, (win_width // 2 - pid_text.get_width() // 2, win_height // 2 - 30))
 
         # Center the text in the input box
         screen.blit(txt_surface, (input_box.x + (input_box.width - txt_surface.get_width()) // 2, input_box.y + (input_box.height - txt_surface.get_height()) // 2))
@@ -137,7 +145,7 @@ def get_pid():
 
         if error_message:
             error_surface = misc_font.render(error_message, True, LOSS_COLOR)
-            screen.blit(error_surface, (SCREEN_WIDTH // 2 - error_surface.get_width() // 2, SCREEN_HEIGHT // 2 + 70))
+            screen.blit(error_surface, (win_width // 2 - error_surface.get_width() // 2, win_height // 2 + 70))
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -157,15 +165,96 @@ def get_pid():
         pygame.display.flip()
 
 # Function to render and display multi-line text with different colors
-def render_multiline_text(lines, colors, feedback_font, surface, x, y):
+def render_multiline_text(lines, colors, feedback_font, surface, x, y, center=False):
     for i, (line, color) in enumerate(zip(lines, colors)):
         line_surface = feedback_font.render(line, True, color)
-        surface.blit(line_surface, (x, y + i * LINE_HEIGHT))
+        if center:
+            line_rect = line_surface.get_rect(center=(x, y + i * LINE_HEIGHT))
+            surface.blit(line_surface, line_rect.topleft)
+        else:
+            surface.blit(line_surface, (x, y + i * LINE_HEIGHT))
+
+# Instruction screen
+def show_instructions(win_width, win_height):
+    screen.fill(BACKGROUND_COLOR)
+    instructions = [
+        "Welcome to the Iowa Gambling Task.",
+        "You will be selecting cards from four decks labeled A, B, C, and D.",
+        "Each selection will result in a reward and/or a penalty.",
+        "Your goal is to maximize your total score.",
+        "You have 100 trials to complete the task.",
+        "Press SPACE to begin."
+    ]
+    for i, line in enumerate(instructions):
+        text = misc_font.render(line, True, TEXT_COLOR)
+        screen.blit(text, (win_width // 2 - text.get_width() // 2, win_height // 2 - 100 + i * LINE_HEIGHT))
+    pygame.display.flip()
+    
+    waiting = True
+    while waiting:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                return False
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+                waiting = False
+    return True
+
+# Start screen
+def show_start_screen(win_width, win_height):
+    screen.fill(BACKGROUND_COLOR)
+    start_text = misc_font.render("Press SPACE to begin", True, TEXT_COLOR)
+    screen.blit(start_text, (win_width // 2 - start_text.get_width() // 2, win_height // 2))
+    pygame.display.flip()
+    
+    waiting = True
+    while waiting:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                return False
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+                waiting = False
+    return True
+
+# Exit screen
+def show_exit_screen(win_width, win_height):
+    screen.fill(BACKGROUND_COLOR)
+    exit_text = [
+        "Thank you! The task is complete!",
+        "Please let the researcher know that you are finished."
+    ]
+    for i, line in enumerate(exit_text):
+        text = misc_font.render(line, True, TEXT_COLOR)
+        screen.blit(text, (win_width // 2 - text.get_width() // 2, win_height // 2 - 50 + i * LINE_HEIGHT))
+    pygame.display.flip()
+    
+    waiting = True
+    while waiting:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                return
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                waiting = False
+    return
 
 # Main loop
-def main():
-    pid = get_pid()
+def main(n_trials = 20, 
+         selection_limit = 10, 
+         win_height= SCREEN_HEIGHT, 
+         win_width=SCREEN_WIDTH):
+    pid = get_pid(win_height= SCREEN_HEIGHT, 
+                  win_width=SCREEN_WIDTH)
     if not pid:
+        return
+
+    if not show_start_screen(win_height= SCREEN_HEIGHT, 
+                             win_width=SCREEN_WIDTH):
+        return
+    
+    if not show_instructions(win_height= SCREEN_HEIGHT, 
+                             win_width=SCREEN_WIDTH):
         return
 
     task = IowaGamblingTask(pid)
@@ -173,12 +262,17 @@ def main():
     trial = 0
 
     try:
-        while running and trial < 100:
+        while running and trial < n_trials:
+            start_time = datetime.now().strftime('%H:%M:%S')
+            trial_start = time.time()
             screen.fill(BACKGROUND_COLOR)
 
-            # Draw card images
+            # Draw card images and labels
             for key, position in DECK_POSITIONS.items():
                 screen.blit(card_images[key], position)
+                label = label_font.render(key, True, TEXT_COLOR)
+                label_rect = label.get_rect(center=(position[0] + CARD_WIDTH // 2, position[1] - 40))
+                screen.blit(label, label_rect)
 
             # Display current total score
             score_text = score_font.render(f"Total Score: ${task.total_score}", True, TEXT_COLOR)
@@ -201,14 +295,27 @@ def main():
                     elif event.key == pygame.K_d:
                         choice = 'D'
 
+            trial_time = time.time() - trial_start
+
             if choice:
-                reward, penalty, net_reward = task.draw_card_from_deck(choice)
-                if reward is not None:
+                reward, penalty, net_reward, error_message = task.draw_card_from_deck(choice, start_time, trial_time, limit = selection_limit)
+                if error_message:
+                    # Display error message
+                    feedback_lines = [
+                        f"Maximum number of selections ({selection_limit})", 
+                        "for this deck has been reached.", 
+                        "Please select another deck."
+                    ]
+                    feedback_colors = [LOSS_COLOR]
+                    for i, line in enumerate(feedback_lines):
+                        text = feedback_font.render(line, True, LOSS_COLOR)
+                        screen.blit(text, (win_width // 2 - text.get_width() // 2, win_height // 2 - 50 + i * LINE_HEIGHT))
+                else:
                     trial += 1
                     print(f"Trial {trial}: Deck {choice}, Reward: {reward}, Penalty: {penalty}, Net reward: {net_reward}")
                     print(f"Total score: {task.total_score}")
 
-                    # Display feedback and selected card
+                    # Display feedback
                     feedback_lines = [
                         f"WIN: ${reward}",
                         f"LOSE: ${penalty}",
@@ -216,21 +323,24 @@ def main():
                     ]
                     feedback_colors = [TEXT_COLOR, TEXT_COLOR, GAIN_COLOR if net_reward > 0 else (LOSS_COLOR if net_reward < 0 else TEXT_COLOR)]
 
-                    # Calculate center position
+                    # Display selected card
                     original_position = DECK_POSITIONS[choice]
                     selected_image = selected_card_images[choice]
                     selected_rect = selected_image.get_rect(center=(original_position[0] + CARD_WIDTH // 2, original_position[1] + CARD_HEIGHT // 2))
-                    
+
                     screen.blit(selected_image, selected_rect.topleft)
-                    render_multiline_text(feedback_lines, feedback_colors, feedback_font, screen, SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 - 50)
-                    pygame.display.flip()
-                    time.sleep(3)  # Show feedback and selected card for 3 seconds
+                    render_multiline_text(feedback_lines, feedback_colors, feedback_font, screen, win_width // 2 - 100, win_height // 2 - 50)
+                
+                pygame.display.flip()
+                time.sleep(TRIAL_WAIT_TIME)  # Show feedback and selected card for 2 seconds
 
             pygame.display.flip()
 
     finally:
         task.summarize_results()
         task.save_data()
+        show_exit_screen(win_height= SCREEN_HEIGHT, 
+                         win_width=SCREEN_WIDTH)
 
 if __name__ == "__main__":
     main()
