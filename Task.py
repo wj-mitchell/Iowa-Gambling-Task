@@ -152,7 +152,10 @@ def get_pid(win_width, win_height):
                 pygame.quit()
                 return None
             elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_RETURN:
+                if event.key == pygame.K_ESCAPE:
+                    pygame.quit()
+                    return None
+                elif event.key == pygame.K_RETURN:
                     if is_valid_pid(pid):
                         return pid
                     else:
@@ -196,8 +199,12 @@ def show_instructions(win_width, win_height):
             if event.type == pygame.QUIT:
                 pygame.quit()
                 return False
-            elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
-                waiting = False
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    pygame.quit()
+                    return False
+                elif event.key == pygame.K_SPACE:
+                    waiting = False
     return True
 
 # Start screen
@@ -213,8 +220,12 @@ def show_start_screen(win_width, win_height):
             if event.type == pygame.QUIT:
                 pygame.quit()
                 return False
-            elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
-                waiting = False
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    pygame.quit()
+                    return False
+                elif event.key == pygame.K_SPACE:
+                    waiting = False
     return True
 
 # Exit screen
@@ -235,26 +246,34 @@ def show_exit_screen(win_width, win_height):
             if event.type == pygame.QUIT:
                 pygame.quit()
                 return
-            elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                waiting = False
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    waiting = False
     return
 
+# Display fixation cross
+def show_fixation_cross(win_width, win_height, duration=2):
+    screen.fill(BACKGROUND_COLOR)
+    cross_text = label_font.render('+', True, TEXT_COLOR)
+    cross_rect = cross_text.get_rect(center=(win_width // 2, win_height // 2))
+    screen.blit(cross_text, cross_rect)
+    pygame.display.flip()
+    time.sleep(duration)
+
 # Main loop
-def main(n_trials = 20, 
-         selection_limit = 10, 
-         win_height= SCREEN_HEIGHT, 
-         win_width=SCREEN_WIDTH):
-    pid = get_pid(win_height= SCREEN_HEIGHT, 
-                  win_width=SCREEN_WIDTH)
+def main(n_trials=100, 
+         selection_limit=40, 
+         win_height=SCREEN_HEIGHT, 
+         win_width=SCREEN_WIDTH,
+         iti_dur=0.5):
+    pid = get_pid(win_width, win_height)
     if not pid:
         return
 
-    if not show_start_screen(win_height= SCREEN_HEIGHT, 
-                             win_width=SCREEN_WIDTH):
+    if not show_start_screen(win_width, win_height):
         return
     
-    if not show_instructions(win_height= SCREEN_HEIGHT, 
-                             win_width=SCREEN_WIDTH):
+    if not show_instructions(win_width, win_height):
         return
 
     task = IowaGamblingTask(pid)
@@ -298,7 +317,7 @@ def main(n_trials = 20,
             trial_time = time.time() - trial_start
 
             if choice:
-                reward, penalty, net_reward, error_message = task.draw_card_from_deck(choice, start_time, trial_time, limit = selection_limit)
+                reward, penalty, net_reward, error_message = task.draw_card_from_deck(choice, start_time, trial_time, limit=selection_limit)
                 if error_message:
                     # Display error message
                     feedback_lines = [
@@ -306,10 +325,8 @@ def main(n_trials = 20,
                         "for this deck has been reached.", 
                         "Please select another deck."
                     ]
-                    feedback_colors = [LOSS_COLOR]
-                    for i, line in enumerate(feedback_lines):
-                        text = feedback_font.render(line, True, LOSS_COLOR)
-                        screen.blit(text, (win_width // 2 - text.get_width() // 2, win_height // 2 - 50 + i * LINE_HEIGHT))
+                    feedback_colors = [LOSS_COLOR, LOSS_COLOR, LOSS_COLOR]
+                    render_multiline_text(feedback_lines, feedback_colors, feedback_font, screen, win_width // 2 - 100, win_height // 2 - 50)
                 else:
                     trial += 1
                     print(f"Trial {trial}: Deck {choice}, Reward: {reward}, Penalty: {penalty}, Net reward: {net_reward}")
@@ -334,13 +351,15 @@ def main(n_trials = 20,
                 pygame.display.flip()
                 time.sleep(TRIAL_WAIT_TIME)  # Show feedback and selected card for 2 seconds
 
+                if iti_dur > 0:
+                    show_fixation_cross(win_width, win_height, duration = iti_dur)
+
             pygame.display.flip()
 
     finally:
         task.summarize_results()
         task.save_data()
-        show_exit_screen(win_height= SCREEN_HEIGHT, 
-                         win_width=SCREEN_WIDTH)
+        show_exit_screen(win_width, win_height)
 
 if __name__ == "__main__":
     main()
