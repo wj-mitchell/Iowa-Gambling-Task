@@ -17,7 +17,7 @@ decks <- data.frame(
 )
 
 # Function to simulate the Iowa Gambling Task
-simulate_IGT <- function(data, dynamic = TRUE, learning_curve = 0.00125) {
+simulate_IGT <- function(data, trials = 100, limit = 40, dynamic = TRUE, learning_curve = 0.000125) {
   
   # Initialize counts for each deck
   deck_counts <- c(A = 0, B = 0, C = 0, D = 0)
@@ -29,11 +29,12 @@ simulate_IGT <- function(data, dynamic = TRUE, learning_curve = 0.00125) {
   probs <- rep(1/length(deck_counts), length(deck_counts))
   
   # Perform 100 trials
-  for (i in 1:100) {
+  for (i in 1:trials) {
     
     # Randomly select a deck, ensuring no more than 40 selections from any deck
-    available_decks <- names(deck_counts[deck_counts < 40])
-    selected_deck <- sample(available_decks, size = 1, prob = probs)
+    available_decks <- names(deck_counts[deck_counts < limit])
+    available_probs <- probs[which(deck_counts < limit)]
+    selected_deck <- sample(available_decks, size = 1, prob = available_probs)
     
     # Identifying the reward and loss index
     reward_index <- paste0("^", selected_deck, "_rewards") %>% grep(., names(data))
@@ -60,14 +61,23 @@ simulate_IGT <- function(data, dynamic = TRUE, learning_curve = 0.00125) {
       }
       
       # Rebalance all of the probabilities 
-      probs <- probs/sum(probs)
+      probs[which(deck_counts < limit)] <- probs[which(deck_counts < limit)]/sum(probs[which(deck_counts < limit)])
     }
   }
   
   return(net_total)
 }
 
-hist(replicate(100, simulate_IGT(data = decks)))
+# Running the simulation n times
+payout <- replicate(20000, simulate_IGT(data = decks))
+
+# Examining simulation statistics
+median(payout)
+sd(payout)
+hist(payout, 
+     main = "Distribution of Possible Payouts in IGT\n(n = 20000)",
+     xlab = "Total Net Outcome",
+     breaks = 11)
 
 # Function to sample 100 values and calculate their sum
 net_sampling <- function(win_data, loss_data, n){ 
@@ -81,7 +91,7 @@ net_sampling <- function(win_data, loss_data, n){
   return(rewards + losses)
 }
 
-# For reproducibility
+# Examining the outcomes if one were to selected the same deck for all trials
 hist(replicate(5000, net_sampling(deck_A$rewards, decks$penalties, 100)))
 hist(replicate(5000, net_sampling(decks$rewards, decks$penalties, 100)))
 hist(replicate(5000, net_sampling(decks$rewards, decks$penalties, 100)))
