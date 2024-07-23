@@ -4,6 +4,7 @@ import csv
 import time
 import re
 from datetime import datetime
+import pandas as pd
 
 # Initialize Pygame
 pygame.init()
@@ -68,41 +69,59 @@ score_font = pygame.font.Font(None, SCORE_FONT_SIZE)
 misc_font = pygame.font.Font(None, MISC_FONT_SIZE)
 label_font = pygame.font.Font(None, LABEL_FONT_SIZE)
 
+# Load the fixed reward schedule from the CSV file
+fixed_schedule_df = pd.read_csv('reward_schedule.csv')
+
 # Deck class
 class Deck:
-    def __init__(self, rewards, penalties):
+    def __init__(self, rewards, penalties, fixed_rewards=None, fixed_penalties=None):
         self.rewards = rewards
         self.penalties = penalties
         self.selected_count = 0
+        self.fixed_rewards = fixed_rewards
+        self.fixed_penalties = fixed_penalties
 
-    def draw_card(self):
-        reward = random.choice(self.rewards)
-        penalty = random.choice(self.penalties)
+    def draw_card(self, fixed_schedule):
+        if fixed_schedule:
+            reward = self.fixed_rewards[self.selected_count]
+            penalty = self.fixed_penalties[self.selected_count]
+        else:
+            reward = random.choice(self.rewards)
+            penalty = random.choice(self.penalties)
+        self.selected_count += 1
         return reward, penalty
 
 # IowaGamblingTask class
 class IowaGamblingTask:
-    def __init__(self, pid):
-        self.decks = {
-            'A': Deck(rewards=[100] * 50 + [50] * 50, penalties=[0] * 90 + [-250] * 10),
-            'B': Deck(rewards=[100] * 50 + [50] * 50, penalties=[0] * 90 + [-1250] * 10),
-            'C': Deck(rewards=[50] * 70 + [50] * 30, penalties=[0] * 90 + [-50] * 10),
-            'D': Deck(rewards=[50] * 70 + [50] * 30, penalties=[0] * 90 + [-250] * 10)
-        }
+    def __init__(self, pid, fixed_schedule):
+        if fixed_schedule:
+            self.decks = {
+                'A': Deck(rewards=[], penalties=[], fixed_rewards=fixed_schedule_df['DeckA_Rewards'].tolist(), fixed_penalties=fixed_schedule_df['DeckA_Penalties'].tolist()),
+                'B': Deck(rewards=[], penalties=[], fixed_rewards=fixed_schedule_df['DeckB_Rewards'].tolist(), fixed_penalties=fixed_schedule_df['DeckB_Penalties'].tolist()),
+                'C': Deck(rewards=[], penalties=[], fixed_rewards=fixed_schedule_df['DeckC_Rewards'].tolist(), fixed_penalties=fixed_schedule_df['DeckC_Penalties'].tolist()),
+                'D': Deck(rewards=[], penalties=[], fixed_rewards=fixed_schedule_df['DeckD_Rewards'].tolist(), fixed_penalties=fixed_schedule_df['DeckD_Penalties'].tolist())
+            }
+        else:
+            self.decks = {
+                'A': Deck(rewards=[100] * 50 + [50] * 50, penalties=[0] * 90 + [-250] * 10),
+                'B': Deck(rewards=[100] * 50 + [50] * 50, penalties=[0] * 90 + [-1250] * 10),
+                'C': Deck(rewards=[50] * 70 + [50] * 30, penalties=[0] * 90 + [-50] * 10),
+                'D': Deck(rewards=[50] * 70 + [50] * 30, penalties=[0] * 90 + [-250] * 10)
+            }
         self.total_score = INITIAL_BALANCE
         self.choices = []
         self.trial_data = []
         self.pid = pid
+        self.fixed_schedule = fixed_schedule
 
     def draw_card_from_deck(self, choice, start_time, trial_time, limit):
         if choice in self.decks:
             if self.decks[choice].selected_count < limit:
-                reward, penalty = self.decks[choice].draw_card()
+                reward, penalty = self.decks[choice].draw_card(self.fixed_schedule)
                 net_reward = reward + penalty
                 self.total_score += net_reward
                 self.choices.append(choice)
                 self.trial_data.append((len(self.choices), choice, reward, penalty, net_reward, self.total_score, trial_time, start_time))
-                self.decks[choice].selected_count += 1
                 return reward, penalty, net_reward, None
             else:
                 return None, None, None, True
@@ -164,6 +183,33 @@ def get_pid(win_width, win_height):
                     pid = pid[:-1]
                 else:
                     pid += event.unicode
+
+        pygame.display.flip()
+
+# Schedule type selection screen
+def get_schedule_type(win_width, win_height):
+    while True:
+        screen.fill(BACKGROUND_COLOR)
+        text = misc_font.render("Choose Reward Schedule:", True, TEXT_COLOR)
+        random_text = misc_font.render("1. Random", True, TEXT_COLOR)
+        fixed_text = misc_font.render("2. Fixed", True, TEXT_COLOR)
+        screen.blit(text, (win_width // 2 - text.get_width() // 2, win_height // 2 - 50))
+        screen.blit(random_text, (win_width // 2 - random_text.get_width() // 2, win_height // 2))
+        screen.blit(fixed_text, (win_width // 2 - fixed_text.get_width() // 2, win_height // 2 + 50))
+        screen.blit(fixed_text, (win_width // 2 - fixed_text.get_width() // 2, win_height // 2 + 50))
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                return None
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    pygame.quit()
+                    return None
+                elif event.key == pygame.K_1:
+                    return False
+                elif event.key == pygame.K_2:
+                    return True
 
         pygame.display.flip()
 
@@ -269,6 +315,10 @@ def main(n_trials=100,
     pid = get_pid(win_width, win_height)
     if not pid:
         return
+    
+    fixed_schedule = get_schedule_type(win_width, win_height)
+    if fixed_schedule is None:
+        return
 
     if not show_start_screen(win_width, win_height):
         return
@@ -276,7 +326,7 @@ def main(n_trials=100,
     if not show_instructions(win_width, win_height):
         return
 
-    task = IowaGamblingTask(pid)
+    task = IowaGamblingTask(pid, fixed_schedule)
     running = True
     trial = 0
 
