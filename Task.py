@@ -316,7 +316,8 @@ def main(n_trials=100,
     if not pid:
         return
     
-    fixed_schedule = get_schedule_type(win_width, win_height)
+    # fixed_schedule = get_schedule_type(win_width, win_height)
+    fixed_schedule = True
     if fixed_schedule is None:
         return
 
