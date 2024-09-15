@@ -115,14 +115,14 @@ class IowaGamblingTask:
         self.pid = pid
         self.fixed_schedule = fixed_schedule
 
-    def draw_card_from_deck(self, choice, start_time, trial_time, limit):
+    def draw_card_from_deck(self, choice, start_time, reaction_time, limit):
         if choice in self.decks:
             if self.decks[choice].selected_count < limit:
                 reward, penalty = self.decks[choice].draw_card(self.fixed_schedule)
                 net_reward = reward - penalty
                 self.total_score += net_reward
                 self.choices.append(choice)
-                self.trial_data.append((len(self.choices), choice, reward, penalty, net_reward, self.total_score, trial_time, start_time))
+                self.trial_data.append((len(self.choices), choice, reward, penalty, net_reward, self.total_score, reaction_time, start_time))
                 return reward, penalty, net_reward, None
             else:
                 return None, None, None, True
@@ -369,10 +369,9 @@ def main(n_trials=100,
                     elif event.key == pygame.K_4:
                         choice = '4'
 
-            trial_time = time.time() - trial_start
-
             if choice:
-                reward, penalty, net_reward, error_message = task.draw_card_from_deck(choice, start_time, trial_time, limit=selection_limit)
+                reaction_time = time.time() - trial_start
+                reward, penalty, net_reward, error_message = task.draw_card_from_deck(choice, start_time, reaction_time, limit=selection_limit)
                 if error_message:
                     # Display error message
                     feedback_lines = [
