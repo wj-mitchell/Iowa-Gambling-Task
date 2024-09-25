@@ -350,10 +350,11 @@ def main(n_trials=100,
 
             # Event handling
             choice = None
+            new_trial = True
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
-                elif event.type == pygame.KEYDOWN:
+                elif event.type == pygame.KEYDOWN and new_trial:
                     if event.key == pygame.K_ESCAPE:
                         running = False
                     elif event.key == pygame.K_a:
@@ -369,6 +370,7 @@ def main(n_trials=100,
 
             if choice:
                 reward, penalty, net_reward, error_message = task.draw_card_from_deck(choice, start_time, trial_time, limit=selection_limit)
+                new_trial = False
                 if error_message:
                     # Display error message
                     feedback_lines = [
