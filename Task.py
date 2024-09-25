@@ -25,10 +25,10 @@ POS_COL_R = 1325
 POS_ROW_TOP = 150
 POS_ROW_BOTTOM = 650
 DECK_POSITIONS = {
-    'A': (POS_COL_L, POS_ROW_TOP),
-    'B': (POS_COL_R, POS_ROW_TOP),
-    'C': (POS_COL_L, POS_ROW_BOTTOM),
-    'D': (POS_COL_R, POS_ROW_BOTTOM)
+    '1': (POS_COL_L, POS_ROW_TOP),
+    '2': (POS_COL_R, POS_ROW_TOP),
+    '3': (POS_COL_L, POS_ROW_BOTTOM),
+    '4': (POS_COL_R, POS_ROW_BOTTOM)
 }
 FEEDBACK_FONT_SIZE = 48
 SCORE_FONT_SIZE = 56
@@ -40,18 +40,18 @@ TRIAL_WAIT_TIME = 2  # Reduced wait time to 2 seconds
 
 # Load card images
 card_images = {
-    'A': pygame.image.load('assets/card_blue_unselected.png'),
-    'B': pygame.image.load('assets/card_red_unselected.png'),
-    'C': pygame.image.load('assets/card_green_unselected.png'),
-    'D': pygame.image.load('assets/card_yellow_unselected.png')
+    '1': pygame.image.load('assets/card_blue_unselected.png'),
+    '2': pygame.image.load('assets/card_red_unselected.png'),
+    '3': pygame.image.load('assets/card_green_unselected.png'),
+    '4': pygame.image.load('assets/card_yellow_unselected.png')
 }
 
 # Load selected card images
 selected_card_images = {
-    'A': pygame.image.load('assets/card_blue_selected.png'),
-    'B': pygame.image.load('assets/card_red_selected.png'),
-    'C': pygame.image.load('assets/card_green_selected.png'),
-    'D': pygame.image.load('assets/card_yellow_selected.png')
+    '1': pygame.image.load('assets/card_blue_selected.png'),
+    '2': pygame.image.load('assets/card_red_selected.png'),
+    '3': pygame.image.load('assets/card_green_selected.png'),
+    '4': pygame.image.load('assets/card_yellow_selected.png')
 }
 
 # Resize card images
@@ -66,6 +66,7 @@ pygame.display.set_caption("Iowa Gambling Task")
 # Font setup
 feedback_font = pygame.font.Font(None, FEEDBACK_FONT_SIZE)
 score_font = pygame.font.Font(None, SCORE_FONT_SIZE)
+trial_count = pygame.font.Font(None, SCORE_FONT_SIZE)
 misc_font = pygame.font.Font(None, MISC_FONT_SIZE)
 label_font = pygame.font.Font(None, LABEL_FONT_SIZE)
 
@@ -96,17 +97,17 @@ class IowaGamblingTask:
     def __init__(self, pid, fixed_schedule):
         if fixed_schedule:
             self.decks = {
-                'A': Deck(rewards=[], penalties=[], fixed_rewards=fixed_schedule_df['DeckA_Rewards'].tolist(), fixed_penalties=fixed_schedule_df['DeckA_Penalties'].tolist()),
-                'B': Deck(rewards=[], penalties=[], fixed_rewards=fixed_schedule_df['DeckB_Rewards'].tolist(), fixed_penalties=fixed_schedule_df['DeckB_Penalties'].tolist()),
-                'C': Deck(rewards=[], penalties=[], fixed_rewards=fixed_schedule_df['DeckC_Rewards'].tolist(), fixed_penalties=fixed_schedule_df['DeckC_Penalties'].tolist()),
-                'D': Deck(rewards=[], penalties=[], fixed_rewards=fixed_schedule_df['DeckD_Rewards'].tolist(), fixed_penalties=fixed_schedule_df['DeckD_Penalties'].tolist())
+                '1': Deck(rewards=[], penalties=[], fixed_rewards=fixed_schedule_df['DeckA_Rewards'].tolist(), fixed_penalties=fixed_schedule_df['DeckA_Penalties'].tolist()),
+                '2': Deck(rewards=[], penalties=[], fixed_rewards=fixed_schedule_df['DeckB_Rewards'].tolist(), fixed_penalties=fixed_schedule_df['DeckB_Penalties'].tolist()),
+                '3': Deck(rewards=[], penalties=[], fixed_rewards=fixed_schedule_df['DeckC_Rewards'].tolist(), fixed_penalties=fixed_schedule_df['DeckC_Penalties'].tolist()),
+                '4': Deck(rewards=[], penalties=[], fixed_rewards=fixed_schedule_df['DeckD_Rewards'].tolist(), fixed_penalties=fixed_schedule_df['DeckD_Penalties'].tolist())
             }
         else:
             self.decks = {
-                'A': Deck(rewards=[100] * 50 + [50] * 50, penalties=[0] * 90 + [-250] * 10),
-                'B': Deck(rewards=[100] * 50 + [50] * 50, penalties=[0] * 90 + [-1250] * 10),
-                'C': Deck(rewards=[50] * 70 + [50] * 30, penalties=[0] * 90 + [-50] * 10),
-                'D': Deck(rewards=[50] * 70 + [50] * 30, penalties=[0] * 90 + [-250] * 10)
+                '1': Deck(rewards=[100] * 50 + [50] * 50, penalties=[0] * 90 + [-250] * 10),
+                '2': Deck(rewards=[100] * 50 + [50] * 50, penalties=[0] * 90 + [-1250] * 10),
+                '3': Deck(rewards=[50] * 70 + [50] * 30, penalties=[0] * 90 + [-50] * 10),
+                '4': Deck(rewards=[50] * 70 + [50] * 30, penalties=[0] * 90 + [-250] * 10)
             }
         self.total_score = INITIAL_BALANCE
         self.choices = []
@@ -114,14 +115,14 @@ class IowaGamblingTask:
         self.pid = pid
         self.fixed_schedule = fixed_schedule
 
-    def draw_card_from_deck(self, choice, start_time, trial_time, limit):
+    def draw_card_from_deck(self, choice, start_time, reaction_time, limit):
         if choice in self.decks:
             if self.decks[choice].selected_count < limit:
                 reward, penalty = self.decks[choice].draw_card(self.fixed_schedule)
-                net_reward = reward + penalty
+                net_reward = reward - penalty
                 self.total_score += net_reward
                 self.choices.append(choice)
-                self.trial_data.append((len(self.choices), choice, reward, penalty, net_reward, self.total_score, trial_time, start_time))
+                self.trial_data.append((len(self.choices), choice, reward, penalty, net_reward, self.total_score, reaction_time, start_time))
                 return reward, penalty, net_reward, None
             else:
                 return None, None, None, True
@@ -227,31 +228,32 @@ def render_multiline_text(lines, colors, feedback_font, surface, x, y, center=Fa
 def show_instructions(win_width, win_height):
     screen.fill(BACKGROUND_COLOR)
     instructions = [
-        "Welcome to the Iowa Gambling Task.",
-        "You will be selecting cards from four decks labeled A, B, C, and D.",
-        "Each selection will result in a reward and/or a penalty.",
-        "Your goal is to maximize your total score.",
-        "You have 100 trials to complete the task.",
-        "Press SPACE to begin."
+        "In this task, you will be asked to repeatedly select a card from one of four decks.\nYou can select a card by pressing 1, 2, 3, or 4 on the keyboard.\n\nPress SPACE to continue.",
+        "With each card, you can win some money, but you can also lose some.\nSome decks will be more profitable than others.\nTry to choose cards from the most profitable decks so that your total winnings will be as high as possible.\n\nPress SPACE to continue.",
+        "You will get 100 chances to select a card from the deck that you think will give you the highest winnings.\nYour total earnings and the number of cards selected will be displayed on screen.\n\nPress SPACE to continue.",
+        "You will start with $2000 and will be rewarded with $1 cash for every $500 you finish the game with.\n\nPress SPACE to begin.",
     ]
-    for i, line in enumerate(instructions):
-        text = misc_font.render(line, True, TEXT_COLOR)
-        screen.blit(text, (win_width // 2 - text.get_width() // 2, win_height // 2 - 100 + i * LINE_HEIGHT))
-    pygame.display.flip()
     
-    waiting = True
-    while waiting:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                return False
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
-                    pygame.quit()
-                    return False
-                elif event.key == pygame.K_SPACE:
-                    waiting = False
-    return True
+    for instruction in instructions:
+        screen.fill(BACKGROUND_COLOR)
+        text_lines = instruction.split("\n")
+        
+        # Render and display each line of text
+        for i, line in enumerate(text_lines):
+            text = misc_font.render(line, True, TEXT_COLOR)
+            screen.blit(text, (win_width // 2 - text.get_width() // 2, win_height // 2 - 100 + i * LINE_HEIGHT))
+        
+        pygame.display.flip()
+        
+        # Clear the event queue to avoid any leftover space key presses
+        pygame.event.clear()
+        
+        # Wait for user to press space to move to the next instruction
+        waiting_for_input = True
+        while waiting_for_input:
+            for event in pygame.event.get():
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+                    waiting_for_input = False  # Move to next instruction
 
 # Start screen
 def show_start_screen(win_width, win_height):
@@ -308,7 +310,7 @@ def show_fixation_cross(win_width, win_height, duration=2):
 
 # Main loop
 def main(n_trials=100, 
-         selection_limit=40, 
+         selection_limit=100, 
          win_height=SCREEN_HEIGHT, 
          win_width=SCREEN_WIDTH,
          iti_dur=0.5):
@@ -324,8 +326,7 @@ def main(n_trials=100,
     if not show_start_screen(win_width, win_height):
         return
     
-    if not show_instructions(win_width, win_height):
-        return
+    show_instructions(win_width, win_height)
 
     task = IowaGamblingTask(pid, fixed_schedule)
     running = True
@@ -345,8 +346,11 @@ def main(n_trials=100,
                 screen.blit(label, label_rect)
 
             # Display current total score
+            trial_text = trial_count.render(f"Trials Remaining: {100-trial}", True, TEXT_COLOR)
+            screen.blit(trial_text, (10, 10))
             score_text = score_font.render(f"Total Score: ${task.total_score}", True, TEXT_COLOR)
-            screen.blit(score_text, (10, 10))
+            screen.blit(score_text, (1550, 10))
+
 
             # Event handling
             choice = None
@@ -357,19 +361,18 @@ def main(n_trials=100,
                 elif event.type == pygame.KEYDOWN and new_trial:
                     if event.key == pygame.K_ESCAPE:
                         running = False
-                    elif event.key == pygame.K_a:
-                        choice = 'A'
-                    elif event.key == pygame.K_b:
-                        choice = 'B'
-                    elif event.key == pygame.K_c:
-                        choice = 'C'
-                    elif event.key == pygame.K_d:
-                        choice = 'D'
-
-            trial_time = time.time() - trial_start
+                    elif event.key == pygame.K_1:
+                        choice = '1'
+                    elif event.key == pygame.K_2:
+                        choice = '2'
+                    elif event.key == pygame.K_3:
+                        choice = '3'
+                    elif event.key == pygame.K_4:
+                        choice = '4'
 
             if choice:
-                reward, penalty, net_reward, error_message = task.draw_card_from_deck(choice, start_time, trial_time, limit=selection_limit)
+                reaction_time = time.time() - trial_start
+                reward, penalty, net_reward, error_message = task.draw_card_from_deck(choice, start_time, reaction_time, limit=selection_limit)
                 new_trial = False
                 if error_message:
                     # Display error message
