@@ -32,7 +32,7 @@ DECK_POSITIONS = {
 }
 FEEDBACK_FONT_SIZE = 48
 SCORE_FONT_SIZE = 56
-MISC_FONT_SIZE = 36
+MISC_FONT_SIZE = 48
 LABEL_FONT_SIZE = 72
 LINE_HEIGHT = FEEDBACK_FONT_SIZE + 5  # Space between lines
 INITIAL_BALANCE = 2000
@@ -138,7 +138,7 @@ class IowaGamblingTask:
         filename = f'data/IGT_{self.pid}_{date_str}.csv'
         with open(filename, 'w', newline='') as file:
             writer = csv.writer(file)
-            writer.writerow(['Trial', 'Deck Choice', 'Reward', 'Penalty', 'Net Reward', 'Total Score', 'Trial Duration (s)', 'Start Time'])
+            writer.writerow(['Trial', 'Deck Choice', 'Reward', 'Penalty', 'Net Reward', 'Total Score', 'Reaction Time (s)', 'Start Time'])
             writer.writerows(self.trial_data)
 
 # PID validation function
@@ -231,7 +231,7 @@ def show_instructions(win_width, win_height):
         "In this task, you will be asked to repeatedly select a card from one of four decks.\nYou can select a card by pressing 1, 2, 3, or 4 on the keyboard.\n\nPress SPACE to continue.",
         "With each card, you can win some money, but you can also lose some.\nSome decks will be more profitable than others.\nTry to choose cards from the most profitable decks so that your total winnings will be as high as possible.\n\nPress SPACE to continue.",
         "You will get 100 chances to select a card from the deck that you think will give you the highest winnings.\nYour total earnings and the number of cards selected will be displayed on screen.\n\nPress SPACE to continue.",
-        "You will start with $2000 and will be rewarded with $1 cash for every $500 you finish the game with.\n\nPress SPACE to begin.",
+        "You will start with $2000 and will be rewarded with $1 cash for every $500 you finish the game with.\n\nIf you have any questions, please ask the researcher before progressing.\n\nPress SPACE to begin.",
     ]
     
     for instruction in instructions:
@@ -331,34 +331,35 @@ def main(n_trials=100,
     task = IowaGamblingTask(pid, fixed_schedule)
     running = True
     trial = 0
+    new_trial = True
 
     try:
         while running and trial < n_trials:
-            start_time = datetime.now().strftime('%H:%M:%S')
-            trial_start = time.time()
-            screen.fill(BACKGROUND_COLOR)
+            if new_trial:
+                pygame.event.clear()
+                start_time = datetime.now()
+                new_trial = False
+                screen.fill(BACKGROUND_COLOR)
 
-            # Draw card images and labels
-            for key, position in DECK_POSITIONS.items():
-                screen.blit(card_images[key], position)
-                label = label_font.render(key, True, TEXT_COLOR)
-                label_rect = label.get_rect(center=(position[0] + CARD_WIDTH // 2, position[1] - 40))
-                screen.blit(label, label_rect)
+                # Draw card images and labels
+                for key, position in DECK_POSITIONS.items():
+                    screen.blit(card_images[key], position)
+                    label = label_font.render(key, True, TEXT_COLOR)
+                    label_rect = label.get_rect(center=(position[0] + CARD_WIDTH // 2, position[1] - 40))
+                    screen.blit(label, label_rect)
 
-            # Display current total score
-            trial_text = trial_count.render(f"Trials Remaining: {100-trial}", True, TEXT_COLOR)
-            screen.blit(trial_text, (10, 10))
-            score_text = score_font.render(f"Total Score: ${task.total_score}", True, TEXT_COLOR)
-            screen.blit(score_text, (1550, 10))
-
+                # Display current total score
+                trial_text = trial_count.render(f"Trials Remaining: {100-trial}", True, TEXT_COLOR)
+                screen.blit(trial_text, (10, 10))
+                score_text = score_font.render(f"Total Score: ${task.total_score}", True, TEXT_COLOR)
+                screen.blit(score_text, (1550, 10))
 
             # Event handling
             choice = None
-            new_trial = True
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
-                elif event.type == pygame.KEYDOWN and new_trial:
+                elif event.type == pygame.KEYDOWN and not new_trial:
                     if event.key == pygame.K_ESCAPE:
                         running = False
                     elif event.key == pygame.K_1:
@@ -369,11 +370,10 @@ def main(n_trials=100,
                         choice = '3'
                     elif event.key == pygame.K_4:
                         choice = '4'
-
+       
             if choice:
-                reaction_time = time.time() - trial_start
-                reward, penalty, net_reward, error_message = task.draw_card_from_deck(choice, start_time, reaction_time, limit=selection_limit)
-                new_trial = False
+                reaction_time = datetime.now() - start_time
+                reward, penalty, net_reward, error_message = task.draw_card_from_deck(choice, start_time.strftime('%H:%M:%S:%f'), reaction_time.total_seconds(), limit=selection_limit)
                 if error_message:
                     # Display error message
                     feedback_lines = [
@@ -385,7 +385,7 @@ def main(n_trials=100,
                     render_multiline_text(feedback_lines, feedback_colors, feedback_font, screen, win_width // 2 - 100, win_height // 2 - 50)
                 else:
                     trial += 1
-                    print(f"Trial {trial}: Deck {choice}, Reward: {reward}, Penalty: {penalty}, Net reward: {net_reward}")
+                    print(f"Trial {trial}: Deck {choice}, Reward: {reward}, Penalty: {penalty}, Net reward: {net_reward}, Reaction Time: {reaction_time.total_seconds()}, Start Time: {start_time.strftime('%H:%M:%S:%f')}")
                     print(f"Total score: {task.total_score}")
 
                     # Display feedback
@@ -406,9 +406,13 @@ def main(n_trials=100,
                 
                 pygame.display.flip()
                 time.sleep(TRIAL_WAIT_TIME)  # Show feedback and selected card for 2 seconds
+                
+                pygame.event.clear()
+                new_trial = True
 
                 if iti_dur > 0:
                     show_fixation_cross(win_width, win_height, duration = iti_dur)
+                    pygame.event.clear()
 
             pygame.display.flip()
 
